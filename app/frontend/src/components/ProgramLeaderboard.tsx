@@ -40,43 +40,51 @@ const ProgramLeaderboard: React.FC<ProgramLeaderboardProps> = ({ programs }) => 
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {programs.map((program, index) => (
-        <div 
-          key={program.program_id} 
-          className="bg-arch-black p-4 rounded-lg hover:bg-arch-gray/20 transition-colors duration-300"
+        <motion.div
+          key={program.program_id}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          className="bg-arch-black/50 p-6 rounded-xl hover:bg-arch-gray/20 transition-colors duration-300"
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center">
-              <Trophy className="text-arch-orange mr-2" size={16} />
-              <span className="text-arch-orange font-bold">#{index + 1}</span>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="bg-arch-orange/10 p-2 rounded-lg">
+                <Trophy className="text-arch-orange" size={20} />
+              </div>
+              <span className="text-xl font-bold text-arch-orange">#{index + 1}</span>
             </div>
-            <span className="text-sm bg-arch-orange/20 text-arch-orange px-2 py-1 rounded">
-              {program.transaction_count.toLocaleString()} txs
-            </span>
+            <div className="bg-arch-orange/10 px-4 py-2 rounded-lg">
+              <span className="text-arch-orange font-semibold">
+                {program.transaction_count.toLocaleString()} txs
+              </span>
+            </div>
           </div>
           
           <div 
-            className="text-sm mb-2 cursor-pointer" 
+            className="group cursor-pointer" 
             title="Click to view program transactions"
             onClick={() => navigate(`/program/${program.program_id}`)}
           >
-            <div className="flex items-center space-x-2">
-              <Hash className="text-arch-orange" size={14} />
-              <span className="font-mono hover:text-arch-orange transition-colors duration-300">
+            <div className="flex items-center space-x-3 mb-3">
+              <Hash className="text-arch-orange" size={16} />
+              <span className="font-mono text-sm group-hover:text-arch-orange transition-colors duration-300">
                 {truncateProgramId(program.program_id)}
               </span>
-              {/* Add this to display the project name if it exists */}
               {getProjectName(program.program_id) && (
-                <span className="text-arch-gray-400 ml-1">({getProjectName(program.program_id)})</span>
+                <span className="text-arch-gray-400 text-sm">
+                  ({getProjectName(program.program_id)})
+                </span>
               )}
             </div>
+            <div className="text-xs text-arch-gray-400 flex items-center">
+              <Clock className="mr-2" size={12} />
+              <span>Last seen: {new Date(program.last_seen_at).toLocaleDateString()}</span>
+            </div>
           </div>
-          <div className="text-xs text-arch-gray-400 flex items-center">
-            <Clock className="mr-1" size={12} />
-            <span>Last seen: {new Date(program.last_seen_at).toLocaleDateString()}</span>
-          </div>
-        </div>
+        </motion.div>
       ))}
     </div>
   );

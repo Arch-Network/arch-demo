@@ -221,35 +221,38 @@ const TransactionHistoryPage: React.FC = () => {
   return (
     <>
       <AnimatedBackground />
-      <div className="relative z-10 p-4 max-w-7xl mx-auto text-arch-white">
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Network Stats */}
-          <div className="w-full md:w-1/4">
+      <div className="relative z-10 p-8 max-w-8xl mx-auto text-arch-white">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Network Stats - Now spans full width on mobile, 1/4 on desktop */}
+          <div className="lg:col-span-1">
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-arch-gray p-4 rounded-lg mb-4"
+              className="bg-arch-black p-6 rounded-xl shadow-lg mb-6"
             >
-              <h2 className="text-2xl font-semibold mb-4">Network Stats</h2>
+              <h2 className="text-2xl font-semibold mb-6">Network Stats</h2>
               {networkStats ? (
                 <>
-                  <p className="mb-2">Total Transactions: {networkStats.total_transactions.toLocaleString()}</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <p className="text-sm">Block Height</p>
-                      <p className="font-semibold">{networkStats.block_height.toLocaleString()}</p>
+                  <div className="text-2xl font-bold text-arch-orange mb-4">
+                    {networkStats.total_transactions.toLocaleString()}
+                    <span className="text-sm text-arch-gray-400 ml-2">Total Transactions</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-arch-gray/20 p-4 rounded-lg">
+                      <p className="text-sm text-arch-gray-400">Block Height</p>
+                      <p className="text-lg font-semibold">{networkStats.block_height.toLocaleString()}</p>
                     </div>
-                    <div>
-                      <p className="text-sm">Slot Height</p>
-                      <p className="font-semibold">{networkStats.slot_height.toLocaleString()}</p>
+                    <div className="bg-arch-gray/20 p-4 rounded-lg">
+                      <p className="text-sm text-arch-gray-400">Slot Height</p>
+                      <p className="text-lg font-semibold">{networkStats.slot_height.toLocaleString()}</p>
                     </div>
-                    <div>
-                      <p className="text-sm">TPS</p>
-                      <p className="font-semibold">{typeof networkStats.tps === 'number' ? networkStats.tps.toFixed(2) : networkStats.tps}</p>
+                    <div className="bg-arch-gray/20 p-4 rounded-lg">
+                      <p className="text-sm text-arch-gray-400">TPS</p>
+                      <p className="text-lg font-semibold">{typeof networkStats.tps === 'number' ? networkStats.tps.toFixed(2) : networkStats.tps}</p>
                     </div>
-                    <div>
-                      <p className="text-sm">True TPS</p>
-                      <p className="font-semibold">{typeof networkStats.true_tps === 'number' ? networkStats.true_tps.toFixed(2) : networkStats.true_tps}</p>
+                    <div className="bg-arch-gray/20 p-4 rounded-lg">
+                      <p className="text-sm text-arch-gray-400">True TPS</p>
+                      <p className="text-lg font-semibold">{typeof networkStats.true_tps === 'number' ? networkStats.true_tps.toFixed(2) : networkStats.true_tps}</p>
                     </div>
                   </div>
                 </>
@@ -262,7 +265,7 @@ const TransactionHistoryPage: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-arch-gray p-6 rounded-lg mt-6"
+              className="bg-arch-black p-6 rounded-xl shadow-lg"
             >
               <h2 className="text-2xl font-semibold mb-6 flex items-center">
                 <Trophy className="text-arch-orange mr-3" size={24} />
@@ -272,8 +275,8 @@ const TransactionHistoryPage: React.FC = () => {
             </motion.div>
           </div>
 
-          {/* Main content */}
-          <div className="w-full md:w-3/4">
+          {/* Main content - Now spans full width on mobile, 3/4 on desktop */}
+          <div className="lg:col-span-3">
             <motion.h1 
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
