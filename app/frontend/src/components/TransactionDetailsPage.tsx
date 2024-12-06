@@ -24,9 +24,13 @@ interface TransactionDetails {
       }[];
     };
   };
-  status: string;
+  status: string | TransactionStatus;
   bitcoin_txids: string[] | null;
   created_at: string;
+}
+
+interface TransactionStatus {
+  Failed?: string;
 }
 
 const TransactionDetailsPage: React.FC = () => {
@@ -47,10 +51,6 @@ const TransactionDetailsPage: React.FC = () => {
         }
         const txDetails = await response.json();
         
-        // Parse the JSON strings in the response
-        txDetails.data = JSON.parse(txDetails.data);
-        txDetails.status = JSON.parse(txDetails.status);
-  
         setTransaction(txDetails);
       } catch (err) {
         console.error('Error fetching transaction details:', err);
@@ -110,7 +110,11 @@ const TransactionDetailsPage: React.FC = () => {
             <Clock className="text-arch-orange mr-3 mt-1 flex-shrink-0" size={24} />
             <div>
               <p className="font-semibold text-arch-orange mb-1">Status:</p>
-              <p>{transaction.status.Failed || 'Processed'}</p>
+              <div className={typeof transaction.status === 'string' && transaction.status.includes("Failed") ? "text-red-500" : "text-green-500"}>
+                {typeof transaction.status === 'string' ?
+                  transaction.status.replace(/^"|"$/g, '') :
+                  transaction.status.Failed}
+              </div>
             </div>
           </div>
           <div className="flex items-start">

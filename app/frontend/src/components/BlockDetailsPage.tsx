@@ -129,7 +129,8 @@ const BlockDetailsPage: React.FC = () => {
       const tx = blockDetails?.transactions.find(t => t.txid === txId);
       if (tx) {
         try {
-          const parsedData = JSON.parse(tx.data);
+          // Handle case where data is already an object
+          const parsedData = typeof tx.data === 'string' ? JSON.parse(tx.data) : tx.data;
           const processedTx: ProcessedTransaction = {
             txid: tx.txid,
             block_height: tx.block_height,
@@ -295,13 +296,19 @@ const BlockDetailsPage: React.FC = () => {
             content: (
               <ul className="space-y-2">
                 {txDetails.data.message.signers.map((signer, index) => {
-                  // Convert the signer array to a single string before encoding
                   const signerString = signer.join(',');
                   const base58Signer = bs58.encode(Buffer.from(signerString));
                   return (
-                    <li key={index} className="text-sm">
-                      {base58Signer}
-                      {renderCopyButton(base58Signer)}
+                    <li key={index} className="text-sm break-all bg-arch-gray p-3 rounded-lg">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="break-all">{base58Signer}</span>
+                        <button
+                          className="text-arch-orange hover:underline whitespace-nowrap flex-shrink-0"
+                          onClick={() => navigator.clipboard.writeText(base58Signer)}
+                        >
+                          Copy
+                        </button>
+                      </div>
                     </li>
                   );
                 })}

@@ -5,6 +5,8 @@ import BlockList from './BlockList';
 import ErrorMessage from './ErrorMessage';
 import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from './AnimatedBackground';
+import ProgramLeaderboard from './ProgramLeaderboard';
+import { Trophy } from 'lucide-react';
 
 const INDEXER_API_URL =  (import.meta as any).env.VITE_INDEXER_API_URL || 'http://localhost:3003/api';
 const SYNC_THRESHOLD = 2;
@@ -14,6 +16,7 @@ interface BlockData {
   height: number;
   hash: string;
   transaction_count: number;
+  timestamp: string;
 }
 
 interface SyncStatus {
@@ -34,6 +37,12 @@ interface NetworkStats {
   true_tps: number;
 }
 
+interface ProgramStats {
+  program_id: string;
+  transaction_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
 
 const TransactionHistoryPage: React.FC = () => {
   const [blocks, setBlocks] = useState<BlockData[]>([]);
@@ -45,6 +54,7 @@ const TransactionHistoryPage: React.FC = () => {
   const [networkStats, setNetworkStats] = useState<NetworkStats | null>(null);
   const [serverStatus, setServerStatus] = useState<boolean>(false);
   const [showOnlyWithTx, setShowOnlyWithTx] = useState<boolean>(false);
+  const [programs, setPrograms] = useState<ProgramStats[]>([]);
 
   const navigate = useNavigate();
 
@@ -107,22 +117,21 @@ const TransactionHistoryPage: React.FC = () => {
     return () => clearInterval(intervalId);
   }, [fetchSyncStatus]);
 
-  const fetchBlocks = useCallback(async (page: number): Promise<void> => {
+  const fetchBlocks = useCallback(async (offset: number): Promise<void> => {
     try {
       setLoading(true);
-      const response = await fetch(`${INDEXER_API_URL}/blocks?page=${page}&limit=${BLOCKS_PER_PAGE}`);
+      const filterParam = showOnlyWithTx ? '&filter_no_transactions=true' : '';
+      const response = await fetch(`${INDEXER_API_URL}/blocks?offset=${offset}&limit=${BLOCKS_PER_PAGE}${filterParam}`);
       if (!response.ok) {
         throw new Error('Failed to fetch blocks from indexer');
       }
       const data = await response.json();
       
-      // Filter blocks if showOnlyWithTx is true
-      const filteredBlocks = showOnlyWithTx 
-        ? data.filter((block: BlockData) => block.transaction_count > 0)
-        : data;
+      // Extract total count and blocks
+      const { total_count, blocks } = data;
       
-      setBlocks(filteredBlocks);
-      setTotalBlocks(filteredBlocks.length);
+      setBlocks(blocks);
+      setTotalBlocks(total_count);
     } catch (err) {
       console.error('Error fetching blocks:', err);
       setError('Failed to fetch blocks. Please try again.');
@@ -131,12 +140,17 @@ const TransactionHistoryPage: React.FC = () => {
     }
   }, [showOnlyWithTx]);
 
+  const handleNextPage = () => {
+    setCurrentPage((prev) => prev + 1);
+  };
+
+  const handlePreviousPage = () => {
+    setCurrentPage((prev) => Math.max(1, prev - 1));
+  };
+
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      fetchBlocks(currentPage);
-    }, 20000); // Fetch new blocks every 30 seconds
-  
-    return () => clearInterval(intervalId);
+    const offset = (currentPage - 1) * BLOCKS_PER_PAGE;
+    fetchBlocks(offset);
   }, [currentPage, fetchBlocks]);
 
   useEffect(() => {
@@ -181,150 +195,182 @@ const TransactionHistoryPage: React.FC = () => {
   const showBlocks = syncPercentage >= SYNC_THRESHOLD;
   const isFullySynced = syncPercentage >= 98;
 
+  const fetchProgramLeaderboard = useCallback(async () => {
+    try {
+      const response = await fetch(`${INDEXER_API_URL}/programs/leaderboard`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch program leaderboard');
+      }
+      const data = await response.json();
+      setPrograms(data);
+    } catch (err) {
+      console.error('Error fetching program leaderboard:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProgramLeaderboard();
+    const intervalId = setInterval(fetchProgramLeaderboard, 60000); // Update every minute
+    return () => clearInterval(intervalId);
+  }, [fetchProgramLeaderboard]);
+
   if (!serverStatus) {
     return <ErrorMessage message="The Arch Indexer API is not running. Please start the server using 'arch-cli indexer start'." />;
   }
 
   return (
-<>
-    <AnimatedBackground />
-    <div className="relative z-10 p-4 max-w-7xl mx-auto text-arch-white">
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Network Stats */}
-        <div className="w-full md:w-1/4">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="bg-arch-gray p-4 rounded-lg"
-          >
-            <h2 className="text-2xl font-semibold mb-4">Network Stats</h2>
-            {networkStats ? (
-              <>
-                <p className="mb-2">Total Transactions: {networkStats.total_transactions.toLocaleString()}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-sm">Block Height</p>
-                    <p className="font-semibold">{networkStats.block_height.toLocaleString()}</p>
+    <>
+      <AnimatedBackground />
+      <div className="relative z-10 p-4 max-w-7xl mx-auto text-arch-white">
+        <div className="flex flex-col md:flex-row gap-8">
+          {/* Network Stats */}
+          <div className="w-full md:w-1/4">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="bg-arch-gray p-4 rounded-lg mb-4"
+            >
+              <h2 className="text-2xl font-semibold mb-4">Network Stats</h2>
+              {networkStats ? (
+                <>
+                  <p className="mb-2">Total Transactions: {networkStats.total_transactions.toLocaleString()}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-sm">Block Height</p>
+                      <p className="font-semibold">{networkStats.block_height.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm">Slot Height</p>
+                      <p className="font-semibold">{networkStats.slot_height.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm">TPS</p>
+                      <p className="font-semibold">{typeof networkStats.tps === 'number' ? networkStats.tps.toFixed(2) : networkStats.tps}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm">True TPS</p>
+                      <p className="font-semibold">{typeof networkStats.true_tps === 'number' ? networkStats.true_tps.toFixed(2) : networkStats.true_tps}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm">Slot Height</p>
-                    <p className="font-semibold">{networkStats.slot_height.toLocaleString()}</p>
+                </>
+              ) : (
+                <p>Loading network stats...</p>
+              )}
+            </motion.div>
+
+            {/* Program Leaderboard */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="bg-arch-gray p-6 rounded-lg mt-6"
+            >
+              <h2 className="text-2xl font-semibold mb-6 flex items-center">
+                <Trophy className="text-arch-orange mr-3" size={24} />
+                Program Leaderboard
+              </h2>
+              <ProgramLeaderboard programs={programs} />
+            </motion.div>
+          </div>
+
+          {/* Main content */}
+          <div className="w-full md:w-3/4">
+            <motion.h1 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-4xl font-bold mb-6"
+            >
+              Block <span className="text-arch-orange">Explorer</span>
+            </motion.h1>
+    
+            <AnimatePresence>
+              {syncStatus && !isFullySynced && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="bg-arch-gray p-4 rounded-lg mb-6"
+                >
+                  <h2 className="text-2xl font-semibold mb-4">
+                    {showBlocks ? "Almost Synced" : "Syncing Blocks..."}
+                  </h2>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
+                    <motion.div 
+                      className="bg-arch-orange h-2.5 rounded-full" 
+                      initial={{ width: 0 }}
+                      animate={{ width: syncStatus.percentage_complete }}
+                      transition={{ duration: 0.5 }}
+                    ></motion.div>
                   </div>
-                  <div>
-                    <p className="text-sm">TPS</p>
-                    <p className="font-semibold">{typeof networkStats.tps === 'number' ? networkStats.tps.toFixed(2) : networkStats.tps}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm">True TPS</p>
-                    <p className="font-semibold">{typeof networkStats.true_tps === 'number' ? networkStats.true_tps.toFixed(2) : networkStats.true_tps}</p>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p>Loading network stats...</p>
-            )}
-          </motion.div>
-        </div>
-  
-        {/* Main content */}
-        <div className="w-full md:w-3/4">
-          <motion.h1 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-4xl font-bold mb-6"
-          >
-            Block <span className="text-arch-orange">Explorer</span>
-          </motion.h1>
-  
-          <AnimatePresence>
-            {syncStatus && !isFullySynced && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="bg-arch-gray p-4 rounded-lg mb-6"
+                  <p>Progress: {syncStatus.percentage_complete}</p>
+                  <p>Current Block: {formatNumber(syncStatus.current_block_height)}</p>
+                  <p>Latest Block: {formatNumber(syncStatus.latest_block_height)}</p>
+                  {!showBlocks && (
+                    <>
+                      <p>Estimated Time to Completion: {syncStatus.estimated_time_to_completion}</p>
+                      <p>Elapsed Time: {syncStatus.elapsed_time}</p>
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            {showBlocks && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
               >
-                <h2 className="text-2xl font-semibold mb-4">
-                  {showBlocks ? "Almost Synced" : "Syncing Blocks..."}
-                </h2>
-                <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
-                  <motion.div 
-                    className="bg-arch-orange h-2.5 rounded-full" 
-                    initial={{ width: 0 }}
-                    animate={{ width: syncStatus.percentage_complete }}
-                    transition={{ duration: 0.5 }}
-                  ></motion.div>
-                </div>
-                <p>Progress: {syncStatus.percentage_complete}</p>
-                <p>Current Block: {formatNumber(syncStatus.current_block_height)}</p>
-                <p>Latest Block: {formatNumber(syncStatus.latest_block_height)}</p>
-                {!showBlocks && (
+                <SearchBar onSearch={handleSearch} />
+                {loading ? (
+                  <div className="flex justify-center items-center h-64">
+                    <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-arch-orange"></div>
+                  </div>
+                ) : error ? (
+                  <ErrorMessage message={error} />
+                ) : (
                   <>
-                    <p>Estimated Time to Completion: {syncStatus.estimated_time_to_completion}</p>
-                    <p>Elapsed Time: {syncStatus.elapsed_time}</p>
+                    <div className="mb-4 flex items-center">
+                      <label className="inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showOnlyWithTx}
+                          onChange={(e) => {
+                            setShowOnlyWithTx(e.target.checked);
+                            setCurrentPage(1); // Reset to first page when toggling filter
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="relative w-11 h-6 bg-arch-gray peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-arch-orange/50 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-arch-orange"></div>
+                        <span className="ml-3 text-sm font-medium text-arch-white">Show only blocks with transactions</span>
+                      </label>
+                    </div>
+                    <BlockList blocks={blocks} />                  
+                    <div className="mt-6 flex justify-center items-center space-x-4">
+                      <button
+                        onClick={handlePreviousPage}
+                        disabled={currentPage === 1}
+                        className="px-4 py-2 bg-arch-gray text-arch-white rounded hover:bg-arch-orange disabled:bg-arch-gray disabled:text-gray-500 transition duration-300"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-arch-white">
+                        Page {currentPage} of {Math.ceil(totalBlocks / BLOCKS_PER_PAGE)}
+                      </span>
+                      <button
+                        onClick={handleNextPage}
+                        disabled={currentPage * BLOCKS_PER_PAGE >= totalBlocks}
+                        className="px-4 py-2 bg-arch-gray text-arch-white rounded hover:bg-arch-orange disabled:bg-arch-gray disabled:text-gray-500 transition duration-300"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </>
                 )}
               </motion.div>
             )}
-          </AnimatePresence>
-          
-          {showBlocks && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-            >
-              <SearchBar onSearch={handleSearch} />
-              {loading ? (
-                <div className="flex justify-center items-center h-64">
-                  <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-arch-orange"></div>
-                </div>
-              ) : error ? (
-                <ErrorMessage message={error} />
-              ) : (
-                <>
-                  <div className="mb-4 flex items-center">
-                    <label className="inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={showOnlyWithTx}
-                        onChange={(e) => {
-                          setShowOnlyWithTx(e.target.checked);
-                          setCurrentPage(1); // Reset to first page when toggling filter
-                        }}
-                        className="sr-only peer"
-                      />
-                      <div className="relative w-11 h-6 bg-arch-gray peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-arch-orange/50 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-arch-orange"></div>
-                      <span className="ml-3 text-sm font-medium text-arch-white">Show only blocks with transactions</span>
-                    </label>
-                  </div>
-                  <BlockList blocks={blocks} />
-                  <div className="mt-6 flex justify-center items-center space-x-4">
-                    <button
-                      onClick={() => setCurrentPage((prev: number) => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                      className="px-4 py-2 bg-arch-gray text-arch-white rounded hover:bg-arch-orange disabled:bg-arch-gray disabled:text-gray-500 transition duration-300"
-                    >
-                      Previous
-                    </button>
-                    <span className="text-arch-white">
-                      Page {currentPage} of {Math.ceil(totalBlocks / BLOCKS_PER_PAGE)}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage(prev => prev + 1)}
-                      disabled={currentPage * BLOCKS_PER_PAGE >= totalBlocks}
-                      className="px-4 py-2 bg-arch-gray text-arch-white rounded hover:bg-arch-orange disabled:bg-arch-gray disabled:text-gray-500 transition duration-300"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </>
-              )}
-            </motion.div>
-          )}
+          </div>
         </div>
       </div>
-    </div>
     </>
   );
 };

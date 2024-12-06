@@ -5,6 +5,7 @@ import BlockDetailsPage from './components/BlockDetailsPage';
 import GraffitiWallComponent from './components/GraffitiWallComponent';
 import TransactionDetailsPage from './components/TransactionDetailsPage';
 import SearchResultPage from './components/SearchResultPage';
+import ProgramTransactionsPage from './components/ProgramTransactionsPage';
 
 const App: React.FC = () => {
   return (
@@ -31,6 +32,7 @@ const App: React.FC = () => {
             <Route path="/block/:blockHashOrHeight" element={<BlockDetailsPage />} />
             <Route path="/transaction/:txId" element={<TransactionDetailsPage />} />
             <Route path="/search/:term" element={<SearchResultPage />} />
+            <Route path="/program/:programId" element={<ProgramTransactionsPage />} />
           </Routes>
         </div>
       </div>
