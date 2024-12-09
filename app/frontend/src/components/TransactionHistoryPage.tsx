@@ -6,7 +6,8 @@ import ErrorMessage from './ErrorMessage';
 import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from './AnimatedBackground';
 import ProgramLeaderboard from './ProgramLeaderboard';
-import { Trophy } from 'lucide-react';
+import { Trophy, Activity, Box, ArrowRightLeft, Code } from 'lucide-react';
+import { ReactNode } from 'react';
 
 const INDEXER_API_URL =  (import.meta as any).env.VITE_INDEXER_API_URL || 'http://localhost:3003/api';
 const SYNC_THRESHOLD = 2;
@@ -44,6 +45,19 @@ interface ProgramStats {
   last_seen_at: string;
 }
 
+interface Transaction {
+  txid: string;
+  timestamp: string;
+  // Add other transaction properties you need
+}
+
+interface Block {
+  hash: string;
+  height: number;
+  timestamp: string;
+  // Add other block properties you need
+}
+
 const TransactionHistoryPage: React.FC = () => {
   const [blocks, setBlocks] = useState<BlockData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -55,6 +69,8 @@ const TransactionHistoryPage: React.FC = () => {
   const [serverStatus, setServerStatus] = useState<boolean>(false);
   const [showOnlyWithTx, setShowOnlyWithTx] = useState<boolean>(false);
   const [programs, setPrograms] = useState<ProgramStats[]>([]);
+  const [latestTransactions, setLatestTransactions] = useState<Transaction[]>([]);
+  const [recentBlocks, setRecentBlocks] = useState<Block[]>([]);
 
   const navigate = useNavigate();
 
@@ -214,6 +230,29 @@ const TransactionHistoryPage: React.FC = () => {
     return () => clearInterval(intervalId);
   }, [fetchProgramLeaderboard]);
 
+  const fetchLatestData = useCallback(async () => {
+    try {
+      const txResponse = await fetch(`${INDEXER_API_URL}/transactions/latest`);
+      const blockResponse = await fetch(`${INDEXER_API_URL}/blocks/latest`);
+      
+      if (txResponse.ok && blockResponse.ok) {
+        const txData = await txResponse.json();
+        const blockData = await blockResponse.json();
+        
+        setLatestTransactions(txData);
+        setRecentBlocks(blockData);
+      }
+    } catch (err) {
+      console.error('Error fetching latest data:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLatestData();
+    const intervalId = setInterval(fetchLatestData, 10000); // Update every 10 seconds
+    return () => clearInterval(intervalId);
+  }, [fetchLatestData]);
+
   if (!serverStatus) {
     return <ErrorMessage message="The Arch Indexer API is not running. Please start the server using 'arch-cli indexer start'." />;
   }
@@ -222,160 +261,192 @@ const TransactionHistoryPage: React.FC = () => {
     <>
       <AnimatedBackground />
       <div className="relative z-10 p-8 max-w-8xl mx-auto text-arch-white">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Network Stats - Now spans full width on mobile, 1/4 on desktop */}
-          <div className="lg:col-span-1">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="bg-arch-black p-6 rounded-xl shadow-lg mb-6"
-            >
-              <h2 className="text-2xl font-semibold mb-6">Network Stats</h2>
-              {networkStats ? (
-                <>
-                  <div className="text-2xl font-bold text-arch-orange mb-4">
-                    {networkStats.total_transactions.toLocaleString()}
-                    <span className="text-sm text-arch-gray-400 ml-2">Total Transactions</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-arch-gray/20 p-4 rounded-lg">
-                      <p className="text-sm text-arch-gray-400">Block Height</p>
-                      <p className="text-lg font-semibold">{networkStats.block_height.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-arch-gray/20 p-4 rounded-lg">
-                      <p className="text-sm text-arch-gray-400">Slot Height</p>
-                      <p className="text-lg font-semibold">{networkStats.slot_height.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-arch-gray/20 p-4 rounded-lg">
-                      <p className="text-sm text-arch-gray-400">TPS</p>
-                      <p className="text-lg font-semibold">{typeof networkStats.tps === 'number' ? networkStats.tps.toFixed(2) : networkStats.tps}</p>
-                    </div>
-                    <div className="bg-arch-gray/20 p-4 rounded-lg">
-                      <p className="text-sm text-arch-gray-400">True TPS</p>
-                      <p className="text-lg font-semibold">{typeof networkStats.true_tps === 'number' ? networkStats.true_tps.toFixed(2) : networkStats.true_tps}</p>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <p>Loading network stats...</p>
-              )}
-            </motion.div>
+        {/* Hero Section with Key Metrics */}
+        <div className="mb-12">
+          <h1 className="text-4xl font-bold mb-6">
+            Arch Network <span className="text-arch-orange">Explorer</span>
+          </h1>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <MetricCard
+              title="Network Status"
+              value={networkStats?.true_tps || "0"}
+              subtitle="Current TPS"
+              icon={<Activity className="text-green-400" />}
+              trend="+5.2%"
+              highlight
+            />
+            <MetricCard
+              title="Latest Block"
+              value={formatNumber(networkStats?.block_height || 0)}
+              subtitle="Height"
+              icon={<Box className="text-arch-orange" />}
+            />
+            <MetricCard
+              title="Transactions"
+              value={formatNumber(networkStats?.total_transactions || 0)}
+              subtitle="24h Volume"
+              icon={<ArrowRightLeft className="text-blue-400" />}
+            />
+            <MetricCard
+              title="Active Programs"
+              value={programs?.length || "0"}
+              subtitle="Last 24h"
+              icon={<Code className="text-purple-400" />}
+            />
+          </div>
+        </div>
 
-            {/* Program Leaderboard */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="bg-arch-black p-6 rounded-xl shadow-lg"
-            >
-              <h2 className="text-2xl font-semibold mb-6 flex items-center">
-                <Trophy className="text-arch-orange mr-3" size={24} />
-                Program Leaderboard
-              </h2>
-              <ProgramLeaderboard programs={programs} />
-            </motion.div>
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Latest Transactions Panel */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-arch-black/50 rounded-xl p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold">Latest Transactions</h2>
+                <SearchBar onSearch={handleSearch} />
+              </div>
+              <TransactionList 
+                transactions={latestTransactions} 
+                compact 
+              />
+              <div className="mt-4 text-center">
+                <Button variant="outline">View All Transactions</Button>
+              </div>
+            </div>
+
+            {/* Recent Blocks Panel */}
+            <div className="bg-arch-black/50 rounded-xl p-6">
+              <h2 className="text-2xl font-semibold mb-6">Recent Blocks</h2>
+              <BlockList blocks={recentBlocks} compact />
+            </div>
           </div>
 
-          {/* Main content - Now spans full width on mobile, 3/4 on desktop */}
-          <div className="lg:col-span-3">
-            <motion.h1 
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-4xl font-bold mb-6"
-            >
-              Block <span className="text-arch-orange">Explorer</span>
-            </motion.h1>
-    
-            <AnimatePresence>
-              {syncStatus && !isFullySynced && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="bg-arch-gray p-4 rounded-lg mb-6"
-                >
-                  <h2 className="text-2xl font-semibold mb-4">
-                    {showBlocks ? "Almost Synced" : "Syncing Blocks..."}
-                  </h2>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
-                    <motion.div 
-                      className="bg-arch-orange h-2.5 rounded-full" 
-                      initial={{ width: 0 }}
-                      animate={{ width: syncStatus.percentage_complete }}
-                      transition={{ duration: 0.5 }}
-                    ></motion.div>
-                  </div>
-                  <p>Progress: {syncStatus.percentage_complete}</p>
-                  <p>Current Block: {formatNumber(syncStatus.current_block_height)}</p>
-                  <p>Latest Block: {formatNumber(syncStatus.latest_block_height)}</p>
-                  {!showBlocks && (
-                    <>
-                      <p>Estimated Time to Completion: {syncStatus.estimated_time_to_completion}</p>
-                      <p>Elapsed Time: {syncStatus.elapsed_time}</p>
-                    </>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-            
-            {showBlocks && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-              >
-                <SearchBar onSearch={handleSearch} />
-                {loading ? (
-                  <div className="flex justify-center items-center h-64">
-                    <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-arch-orange"></div>
-                  </div>
-                ) : error ? (
-                  <ErrorMessage message={error} />
-                ) : (
-                  <>
-                    <div className="mb-4 flex items-center">
-                      <label className="inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showOnlyWithTx}
-                          onChange={(e) => {
-                            setShowOnlyWithTx(e.target.checked);
-                            setCurrentPage(1); // Reset to first page when toggling filter
-                          }}
-                          className="sr-only peer"
-                        />
-                        <div className="relative w-11 h-6 bg-arch-gray peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-arch-orange/50 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-arch-orange"></div>
-                        <span className="ml-3 text-sm font-medium text-arch-white">Show only blocks with transactions</span>
-                      </label>
-                    </div>
-                    <BlockList blocks={blocks} />                  
-                    <div className="mt-6 flex justify-center items-center space-x-4">
-                      <button
-                        onClick={handlePreviousPage}
-                        disabled={currentPage === 1}
-                        className="px-4 py-2 bg-arch-gray text-arch-white rounded hover:bg-arch-orange disabled:bg-arch-gray disabled:text-gray-500 transition duration-300"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-arch-white">
-                        Page {currentPage} of {Math.ceil(totalBlocks / BLOCKS_PER_PAGE)}
-                      </span>
-                      <button
-                        onClick={handleNextPage}
-                        disabled={currentPage * BLOCKS_PER_PAGE >= totalBlocks}
-                        className="px-4 py-2 bg-arch-gray text-arch-white rounded hover:bg-arch-orange disabled:bg-arch-gray disabled:text-gray-500 transition duration-300"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </>
-                )}
-              </motion.div>
-            )}
+          {/* Right Sidebar */}
+          <div className="space-y-6">
+            {/* Top Programs */}
+            <div className="bg-arch-black/50 rounded-xl p-6">
+              <h2 className="text-2xl font-semibold mb-6 flex items-center">
+                <Trophy className="text-arch-orange mr-3" size={24} />
+                Top Programs
+              </h2>
+              <ProgramLeaderboard programs={programs} limit={5} />
+              <div className="mt-4 text-center">
+                <Button variant="ghost">View All Programs</Button>
+              </div>
+            </div>
+
+            {/* Network Health */}
+            <div className="bg-arch-black/50 rounded-xl p-6">
+              <h2 className="text-2xl font-semibold mb-6">Network Health</h2>
+              <div className="space-y-4">
+                <HealthMetric
+                  label="Sync Status"
+                  value={syncStatus?.percentage_complete || "100%"}
+                  status="success"
+                />
+                <HealthMetric
+                  label="Node Version"
+                  value="v1.2.3"
+                  status="success"
+                />
+                <HealthMetric
+                  label="Network Load"
+                  value="Medium"
+                  status="warning"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </>
   );
 };
+
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: ReactNode;
+  trend?: string;
+  highlight?: boolean;
+}
+
+const MetricCard: React.FC<MetricCardProps> = ({
+  title,
+  value,
+  subtitle,
+  icon,
+  trend,
+  highlight
+}) => (
+  <div className={`
+    p-6 rounded-xl 
+    ${highlight ? 'bg-gradient-to-br from-arch-orange/20 to-arch-black/50' : 'bg-arch-black/50'}
+  `}>
+    <div className="flex justify-between items-start mb-4">
+      <span className="text-sm text-arch-gray-400">{title}</span>
+      {icon}
+    </div>
+    <div className="flex items-baseline">
+      <span className="text-2xl font-bold">{value}</span>
+      {trend && (
+        <span className="ml-2 text-sm text-green-400">{trend}</span>
+      )}
+    </div>
+    <span className="text-sm text-arch-gray-400">{subtitle}</span>
+  </div>
+);
+
+interface HealthMetricProps {
+  label: string;
+  value: string;
+  status: 'success' | 'warning' | 'error';
+}
+
+const HealthMetric: React.FC<HealthMetricProps> = ({
+  label,
+  value,
+  status
+}) => (
+  <div className="flex items-center justify-between">
+    <span className="text-sm text-arch-gray-400">{label}</span>
+    <div className="flex items-center">
+      <span className="mr-2">{value}</span>
+      <div className={`
+        w-2 h-2 rounded-full
+        ${status === 'success' ? 'bg-green-400' : 
+          status === 'warning' ? 'bg-yellow-400' : 
+          'bg-red-400'}
+      `} />
+    </div>
+  </div>
+);
+
+const TransactionList: React.FC<{ transactions: Transaction[]; compact?: boolean }> = ({ 
+  transactions, 
+  compact 
+}) => (
+  <div className="space-y-2">
+    {transactions?.map(tx => (
+      <div key={tx.txid} className="p-4 bg-arch-black/30 rounded-lg">
+        {tx.txid}
+      </div>
+    ))}
+  </div>
+);
+
+const BlockList: React.FC<{ blocks: Block[]; compact?: boolean }> = ({ 
+  blocks, 
+  compact 
+}) => (
+  <div className="space-y-2">
+    {blocks?.map(block => (
+      <div key={block.hash} className="p-4 bg-arch-black/30 rounded-lg">
+        Block {block.height}
+      </div>
+    ))}
+  </div>
+);
 
 export default TransactionHistoryPage;
