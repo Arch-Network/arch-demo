@@ -352,12 +352,6 @@ const GraffitiWallComponent = () => {
 
       {!wallet.isConnected ? (
         <div className="space-y-4 mb-4">
-          <div className="flex items-center justify-center space-x-4 bg-arch-black p-4 rounded-lg">
-            <img src="/xverse.png" alt="Xverse Wallet" className="h-6" />
-            <p className="text-arch-white text-sm">
-              Compatible with Xverse Wallet in <span className="text-arch-orange font-semibold">Testnet mode</span>
-            </p>
-          </div>
           <div className="mb-4">
             <select 
               value={selectedWallet}
@@ -374,7 +368,7 @@ const GraffitiWallComponent = () => {
           <button
             onClick={async () => {
               try {
-                addDebugLog('Attempting wallet connection...');
+                addDebugLog(`Attempting connection with ${selectedWallet}...`);
                 await wallet.connect(selectedWallet);
                 addDebugLog('Wallet connected successfully');
               } catch (error) {

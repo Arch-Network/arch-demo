@@ -77,22 +77,46 @@ export const walletProviders: WalletProvider[] = [
   {
     name: 'Leather',
     icon: '/leather.png',
-    isAvailable: () => checkWalletAvailability(window, 'leather'),
+    isAvailable: () => {
+    
+      console.log('Checking Leather availability:', window.btc?.isLeather);
+      return !!(window.btc?.isLeather);
+    },
     connect: async () => {
-      const accounts = await window.leather.enable();
-      return {
-        address: accounts[0],
-        publicKey: accounts[0]
-      };
+      if (!window.btc && !window.btc?.isLeather) {
+        throw new Error('Leather wallet not found');
+      }
+      
+      try {
+        const response = await window.btc.request('getAddresses');
+        console.log('Leather response', response);
+        
+        // Find the p2tr address from the response
+        const p2trAddress = response?.result?.addresses?.find(
+          (addr: any) => addr.type === 'p2tr'
+        );
+
+        if (!p2trAddress) {
+          throw new Error('No P2TR address returned from Leather wallet');
+        }
+
+        return {
+          address: p2trAddress.address,
+          publicKey: p2trAddress.publicKey
+        };
+      } catch (error) {
+        console.error('Leather connect error:', error);
+        throw error;
+      }
     },
     disconnect: async () => {
       return Promise.resolve();
     },
     signMessage: async (message: string) => {
-      return await window.leather.request({
-        method: 'signMessage',
-        params: { message }
-      });
+      if (!window.btc) {
+        throw new Error('Leather wallet not found');
+      }
+      return await window.btc.request('signMessage', { message });
     }
   }
 ];
