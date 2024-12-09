@@ -7,7 +7,9 @@ import { useNavigate } from 'react-router-dom';
 import AnimatedBackground from './AnimatedBackground';
 import ProgramLeaderboard from './ProgramLeaderboard';
 import { Trophy, Activity, Box, ArrowRightLeft, Code } from 'lucide-react';
+import { Button } from './ui/button';
 import { ReactNode } from 'react';
+import TransactionList from './TransactionList';
 
 const INDEXER_API_URL =  (import.meta as any).env.VITE_INDEXER_API_URL || 'http://localhost:3003/api';
 const SYNC_THRESHOLD = 2;
@@ -45,19 +47,6 @@ interface ProgramStats {
   last_seen_at: string;
 }
 
-interface Transaction {
-  txid: string;
-  timestamp: string;
-  // Add other transaction properties you need
-}
-
-interface Block {
-  hash: string;
-  height: number;
-  timestamp: string;
-  // Add other block properties you need
-}
-
 const TransactionHistoryPage: React.FC = () => {
   const [blocks, setBlocks] = useState<BlockData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -70,7 +59,6 @@ const TransactionHistoryPage: React.FC = () => {
   const [showOnlyWithTx, setShowOnlyWithTx] = useState<boolean>(false);
   const [programs, setPrograms] = useState<ProgramStats[]>([]);
   const [latestTransactions, setLatestTransactions] = useState<Transaction[]>([]);
-  const [recentBlocks, setRecentBlocks] = useState<Block[]>([]);
 
   const navigate = useNavigate();
 
@@ -230,28 +218,24 @@ const TransactionHistoryPage: React.FC = () => {
     return () => clearInterval(intervalId);
   }, [fetchProgramLeaderboard]);
 
-  const fetchLatestData = useCallback(async () => {
+  const fetchLatestTransactions = useCallback(async () => {
     try {
-      const txResponse = await fetch(`${INDEXER_API_URL}/transactions/latest`);
-      const blockResponse = await fetch(`${INDEXER_API_URL}/blocks/latest`);
-      
-      if (txResponse.ok && blockResponse.ok) {
-        const txData = await txResponse.json();
-        const blockData = await blockResponse.json();
-        
-        setLatestTransactions(txData);
-        setRecentBlocks(blockData);
+      const response = await fetch(`${INDEXER_API_URL}/transactions?limit=5`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch latest transactions');
       }
+      const data = await response.json();
+      setLatestTransactions(data.transactions);
     } catch (err) {
-      console.error('Error fetching latest data:', err);
+      console.error('Error fetching latest transactions:', err);
     }
   }, []);
 
   useEffect(() => {
-    fetchLatestData();
-    const intervalId = setInterval(fetchLatestData, 10000); // Update every 10 seconds
+    fetchLatestTransactions();
+    const intervalId = setInterval(fetchLatestTransactions, 60000); // Update every minute
     return () => clearInterval(intervalId);
-  }, [fetchLatestData]);
+  }, [fetchLatestTransactions]);
 
   if (!serverStatus) {
     return <ErrorMessage message="The Arch Indexer API is not running. Please start the server using 'arch-cli indexer start'." />;
@@ -317,7 +301,7 @@ const TransactionHistoryPage: React.FC = () => {
             {/* Recent Blocks Panel */}
             <div className="bg-arch-black/50 rounded-xl p-6">
               <h2 className="text-2xl font-semibold mb-6">Recent Blocks</h2>
-              <BlockList blocks={recentBlocks} compact />
+              <BlockList blocks={blocks} compact />
             </div>
           </div>
 
@@ -420,32 +404,6 @@ const HealthMetric: React.FC<HealthMetricProps> = ({
           'bg-red-400'}
       `} />
     </div>
-  </div>
-);
-
-const TransactionList: React.FC<{ transactions: Transaction[]; compact?: boolean }> = ({ 
-  transactions, 
-  compact 
-}) => (
-  <div className="space-y-2">
-    {transactions?.map(tx => (
-      <div key={tx.txid} className="p-4 bg-arch-black/30 rounded-lg">
-        {tx.txid}
-      </div>
-    ))}
-  </div>
-);
-
-const BlockList: React.FC<{ blocks: Block[]; compact?: boolean }> = ({ 
-  blocks, 
-  compact 
-}) => (
-  <div className="space-y-2">
-    {blocks?.map(block => (
-      <div key={block.hash} className="p-4 bg-arch-black/30 rounded-lg">
-        Block {block.height}
-      </div>
-    ))}
   </div>
 );
 

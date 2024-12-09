@@ -73,6 +73,8 @@ const GraffitiWallComponent = () => {
   const [isFormValid, setIsFormValid] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const [selectedWallet, setSelectedWallet] = useState<string>('Xverse');
+
   const addDebugLog = (message: string) => {
     setDebugInfo(prev => [...prev.slice(-4), message]); // Keep last 5 messages
   };
@@ -356,11 +358,24 @@ const GraffitiWallComponent = () => {
               Compatible with Xverse Wallet in <span className="text-arch-orange font-semibold">Testnet mode</span>
             </p>
           </div>
+          <div className="mb-4">
+            <select 
+              value={selectedWallet}
+              onChange={(e) => setSelectedWallet(e.target.value)}
+              className="w-full px-3 py-2 bg-arch-gray text-arch-white rounded-md focus:outline-none focus:ring-2 focus:ring-arch-orange"
+            >
+              {wallet.availableWallets.map(provider => (
+                <option key={provider.name} value={provider.name}>
+                  {provider.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={async () => {
               try {
                 addDebugLog('Attempting wallet connection...');
-                await wallet.connect();
+                await wallet.connect(selectedWallet);
                 addDebugLog('Wallet connected successfully');
               } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);

@@ -12,6 +12,7 @@ interface ProgramStats {
 
 interface ProgramLeaderboardProps {
   programs: ProgramStats[];
+  limit?: number;
 }
 
 // Add this mapping at the top of the file, outside the component

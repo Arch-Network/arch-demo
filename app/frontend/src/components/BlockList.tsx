@@ -12,6 +12,7 @@ interface BlockData {
 
 interface BlockListProps {
   blocks: BlockData[];
+  compact?: boolean;
 }
 
 const formatTimestamp = (timestamp: string): string => {
