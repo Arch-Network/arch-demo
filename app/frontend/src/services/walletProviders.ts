@@ -118,17 +118,53 @@ export const walletProviders: WalletProvider[] = [
     icon: '/okx.png',
     isAvailable: () => checkWalletAvailability(window, 'okxwallet'),
     connect: async () => {
-      const accounts = await window.okxwallet.bitcoin.connect();
-      return {
-        address: accounts[0],
-        publicKey: accounts[0]
-      };
+      try {
+        const accounts = await window.okxwallet.bitcoin.connect();
+        // Get the public key separately if possible
+        let publicKey;
+        try {
+          publicKey = await window.okxwallet.bitcoin.getPublicKey();
+        } catch (error) {
+          console.warn('Could not get OKX public key:', error);
+          publicKey = accounts[0]; // Fallback to address if public key isn't available
+        }
+
+        // Log the connection details for debugging
+        console.log('OKX Wallet Connected:', {
+          address: accounts[0],
+          publicKey: publicKey
+        });
+
+        return {
+          address: accounts[0],
+          publicKey: publicKey
+        };
+      } catch (error) {
+        console.error('Error connecting to OKX wallet:', error);
+        throw error;
+      }
     },
     disconnect: async () => {
-      return Promise.resolve();
+      try {
+        // Check if there's a disconnect method available
+        if (window.okxwallet.bitcoin.disconnect) {
+          await window.okxwallet.bitcoin.disconnect();
+        }
+        return Promise.resolve();
+      } catch (error) {
+        console.error('Error disconnecting OKX wallet:', error);
+        return Promise.resolve();
+      }
     },
     signMessage: async (message: string) => {
-      return await window.okxwallet.bitcoin.signMessage(message);
+      try {
+        const signature = await window.okxwallet.bitcoin.signMessage(message, "bip322-simple");
+        console.log('OKX signature:', signature);
+        return signature;
+      } catch (error) {
+        console.error('Error signing with OKX:', error);
+        throw error;
+      }
     }
   },
   {

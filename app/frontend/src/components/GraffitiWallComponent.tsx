@@ -248,7 +248,7 @@ const GraffitiWallComponent = () => {
 
       // Handle Unisat public key format differently
       let pubkeyBytes: Uint8Array;
-      if (wallet.provider === 'Unisat' || wallet.provider === 'Leather') {
+      if (wallet.provider === 'Unisat' || wallet.provider === 'Leather' || wallet.provider === 'OKX') {
         // Remove the network prefix (first byte) from Unisat's public key
         const rawPubkey = hexToUint8Array(wallet.publicKey);
         pubkeyBytes = rawPubkey.slice(1); // Remove the first byte (network prefix)
