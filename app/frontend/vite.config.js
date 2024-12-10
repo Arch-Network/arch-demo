@@ -18,11 +18,12 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: process.env.VITE_RPC_URL,
+        target: process.env.VITE_RPC_URL || 'https://rpc-01.test.arch.network',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         configure: (proxy) => {
           proxy.on('error', (err, req, res) => {
+            console.log('VITE_RPC_URL', process.env.VITE_RPC_URL);
             console.error('proxy error', err);
             res.writeHead(500, {
               'Content-Type': 'text/plain',

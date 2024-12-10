@@ -6,46 +6,55 @@ import { useNavigate } from 'react-router-dom';
 interface Transaction {
   txid: string;
   block_height: number;
-  data: string;
   status: string;
-  bitcoin_txids: string[] | null;
   created_at: string;
+  // Add other fields as needed
 }
 
 interface TransactionListProps {
-  transactions?: Transaction[];
+  transactions: Transaction[];
+  compact?: boolean;
 }
 
-const TransactionList: React.FC<TransactionListProps> = ({ transactions = [] }) => {
-  const navigate = useNavigate();
-
+export function TransactionList({ transactions, compact }: TransactionListProps) {
   if (!transactions || transactions.length === 0) {
-    return <div className="text-gray-400">No transactions to display</div>;
+    console.log(transactions);
+    return (
+      <div className="text-center py-8 text-gray-400">
+        No transactions found
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
-      {transactions.map((tx, index) => (
-        <motion.div
+      {transactions.map((tx) => (
+        <div
           key={tx.txid}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
-          className="bg-arch-black/50 p-4 rounded-lg hover:bg-arch-gray/20 transition-colors cursor-pointer"
-          onClick={() => navigate(`/transaction/${tx.txid}`)}
+          className="bg-arch-black/30 rounded-lg p-4 hover:bg-arch-black/40 transition-colors"
         >
-          <div className="flex items-center space-x-3">
-            <Hash className="text-arch-orange" size={16} />
-            <span className="font-mono text-sm">{tx.txid.slice(0, 8)}...{tx.txid.slice(-8)}</span>
+          <div className="flex justify-between items-start">
+            <div>
+              <div className="font-mono text-sm text-arch-orange">
+                {tx.txid.substring(0, 8)}...{tx.txid.substring(tx.txid.length - 8)}
+              </div>
+              <div className="text-sm text-gray-400">
+                Block: {tx.block_height}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm">
+                {new Date(tx.created_at).toLocaleString()}
+              </div>
+              <div className={`text-sm ${tx.status.includes("Failed") ? "text-red-400" : "text-green-400"}`}>
+                {tx.status.replace(/['"]/g, '')}
+              </div>
+            </div>
           </div>
-          <div className="text-xs text-arch-gray-400 flex items-center mt-2">
-            <Clock className="mr-2" size={12} />
-            <span>{new Date(tx.created_at).toLocaleString()}</span>
-          </div>
-        </motion.div>
+        </div>
       ))}
     </div>
   );
-};
+}
 
 export default TransactionList;

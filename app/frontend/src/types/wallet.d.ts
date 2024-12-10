@@ -2,7 +2,8 @@
 declare interface UniSat {
   requestAccounts(): Promise<string[]>;
   getAccounts(): Promise<string[]>;
-  // Add other methods as needed
+  getPublicKey(): Promise<string>;
+  signMessage(message: string): Promise<string>;
 }
 
 // OKX Wallet

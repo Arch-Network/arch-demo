@@ -92,7 +92,7 @@ pub fn process_instruction(
     })?;
 
     let mut data = wall_account.try_borrow_mut_data()?;
-    
+
     // Read or create header
     let mut header = if data.len() > 0 {
         GraffitiWallHeader::try_from_slice(&data[..HEADER_SIZE]).map_err(|e| {

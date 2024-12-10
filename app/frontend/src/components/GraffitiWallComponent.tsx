@@ -5,56 +5,70 @@ import { Buffer } from 'buffer';
 import { useWallet } from '../hooks/useWallet';
 import * as borsh from 'borsh';
 import AnimatedBackground from './AnimatedBackground';
+import { createTransaction } from '../utils/cryptoHelpers';
 
 
 // Configure global Buffer for browser environment
 window.Buffer = Buffer;
 
 // Environment variables for configuration
-const client = new RpcConnection((import.meta as any).env.VITE_RPC_URL || '/api');
+const client = new RpcConnection('/api');
 const PROGRAM_PUBKEY = (import.meta as any).env.VITE_PROGRAM_PUBKEY;
 const WALL_ACCOUNT_PUBKEY = (import.meta as any).env.VITE_WALL_ACCOUNT_PUBKEY;
 
-class GraffitiMessage {
-  constructor(
-    public timestamp: number,
-    public name: string,
-    public message: string
-  ) {}
-
-  static schema = new Map([
-    [
-      GraffitiMessage,
-      {
-        kind: 'struct',
-        fields: [
-          ['timestamp', 'i64'],
-          ['name', ['u8', 64]],
-          ['message', ['u8', 64]]
-        ]
-      }
-    ]
-  ]);
+interface GraffitiMessage {
+  timestamp: number;
+  name: string;
+  message: string;
 }
 
-// Define the schema for the wall containing messages
-class GraffitiWall {
-  constructor(public messages: GraffitiMessage[]) {}
-
-  static schema = new Map([
-    [
-      GraffitiWall,
-      {
-        kind: 'struct',
-        fields: [
-          ['messages', [GraffitiMessage]]
-        ]
-      }
-    ]
-  ]);
+interface GraffitiWallHeader {
+  message_count: number;
+  max_messages: number;
 }
 
+interface WalletOption {
+  name: string;
+  icon: string;
+  isAvailable: () => boolean;
+}
 
+const WalletSelector = ({ 
+  selectedWallet, 
+  onSelect, 
+  wallets 
+}: { 
+  selectedWallet: string;
+  onSelect: (wallet: string) => void;
+  wallets: WalletOption[];
+}) => {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {wallets.map((wallet) => (
+        <button
+          key={wallet.name}
+          onClick={() => onSelect(wallet.name)}
+          className={`
+            flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200
+            ${selectedWallet === wallet.name 
+              ? 'bg-arch-orange text-arch-black' 
+              : 'bg-arch-black/30 hover:bg-arch-black/50 text-arch-white'}
+          `}
+        >
+          <img 
+            src={wallet.icon} 
+            alt={`${wallet.name} logo`} 
+            className="w-5 h-5 object-contain"
+          />
+          <span className="font-medium">{wallet.name}</span>
+          {selectedWallet === wallet.name && (
+            <Check className="w-4 h-4" />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+};
 
 const GraffitiWallComponent = () => {
 
@@ -137,61 +151,51 @@ const GraffitiWallComponent = () => {
   // Fetch and parse wall messages
   const fetchWallData = useCallback(async () => {
     try {
-        const userAccount = await client.readAccountInfo(accountPubkey);
-        if (!userAccount) {
-            setError('Account not found.');
-            return;
-        }
-        const wallData = userAccount.data;
+      const pubkeyBytes = PubkeyUtil.fromHex(WALL_ACCOUNT_PUBKEY);
+      const accountInfo = await client.readAccountInfo(pubkeyBytes);
+      
+      if (!accountInfo || !accountInfo.data) {
+        setWallData([]);
+        return;
+      }
+
+      const data = accountInfo.data;
+
+      // Read header (first 8 bytes)
+      const header = {
+        message_count: new DataView(data.buffer).getUint32(0, true),
+        max_messages: new DataView(data.buffer).getUint32(4, true)
+      };
+
+      const messages: GraffitiMessage[] = [];
+      const HEADER_SIZE = 8;
+      const MESSAGE_SIZE = 8 + 64 + 64; // timestamp + name + message
+
+      // Read messages
+      for (let i = 0; i < header.message_count; i++) {
+        const offset = HEADER_SIZE + (i * MESSAGE_SIZE);
         
-        console.log(`Wall data: ${wallData}`);
-
-        // If data is empty or invalid length, just set empty messages without error
-        if (!wallData || wallData.length < 4) {
-            setWallData([]);
-            setError(null); // Clear any existing errors
-            return;
-        }
+        // Read timestamp (8 bytes)
+        const timestamp = Number(new DataView(data.buffer).getBigInt64(offset, true));
         
-        // Deserialize the wall data using borsh
-        // Read data directly from the buffer
-        const messages = [];
-        let offset = 0;
+        // Read name (64 bytes)
+        const nameBytes = data.slice(offset + 8, offset + 8 + 64);
+        const name = new TextDecoder().decode(nameBytes.filter(x => x !== 0));
+        
+        // Read message (64 bytes)
+        const messageBytes = data.slice(offset + 8 + 64, offset + 8 + 64 + 64);
+        const message = new TextDecoder().decode(messageBytes.filter(x => x !== 0));
 
-        // First 4 bytes are the array length
-        const messageCount = new DataView(wallData.buffer).getUint32(offset, true);
-        offset += 4;
+        messages.push({ timestamp, name, message });
+      }
 
-        for (let i = 0; i < messageCount; i++) {
-            // Read timestamp (8 bytes)
-            const timestamp = new DataView(wallData.buffer).getBigInt64(offset, true);
-            offset += 8;
-
-            // Read name (64 bytes)
-            const nameBytes = wallData.slice(offset, offset + 64);
-            const name = new TextDecoder().decode(nameBytes.filter(x => x !== 0));
-            offset += 64;
-
-            // Read message (64 bytes)
-            const messageBytes = wallData.slice(offset, offset + 64);
-            const message = new TextDecoder().decode(messageBytes.filter(x => x !== 0));
-            offset += 64;
-
-            messages.push(new GraffitiMessage(
-                Number(timestamp),
-                name,
-                message
-            ));
-        }
-
-        messages.sort((a, b) => b.timestamp - a.timestamp);
-
-        setWallData(messages);
+      setWallData(messages);
+      setError(null);
     } catch (error) {
-        console.error('Error fetching wall data:', error);
-        setError(`Failed to fetch wall data: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('Error fetching wall data:', error);
+      setError('Failed to fetch wall data');
     }
-}, []);
+  }, []);
 
   // Initialize component
   useEffect(() => {
@@ -237,12 +241,26 @@ const GraffitiWallComponent = () => {
 
     try {
       const data = serializeGraffitiData(name, message);
-    
+
+      if (!wallet.publicKey) {
+        throw new Error('No public key available from wallet');
+      }
+
+      // Handle Unisat public key format differently
+      let pubkeyBytes: Uint8Array;
+      if (wallet.provider === 'Unisat') {
+        // Remove the network prefix (first byte) from Unisat's public key
+        const rawPubkey = hexToUint8Array(wallet.publicKey);
+        pubkeyBytes = rawPubkey.slice(1); // Remove the first byte (network prefix)
+      } else {
+        pubkeyBytes = PubkeyUtil.fromHex(wallet.publicKey);
+      }
+
       const instruction: Instruction = {
         program_id: PubkeyUtil.fromHex(PROGRAM_PUBKEY),
         accounts: [
           { 
-            pubkey: PubkeyUtil.fromHex(wallet.publicKey!), 
+            pubkey: pubkeyBytes,
             is_signer: true, 
             is_writable: false 
           },
@@ -255,26 +273,30 @@ const GraffitiWallComponent = () => {
         data: new Uint8Array(data),
       };
 
-      const messageObj : Message = {
-        signers: [PubkeyUtil.fromHex(wallet.publicKey!)],
+      const messageObj: Message = {
+        signers: [pubkeyBytes],
         instructions: [instruction],
       };
 
-      console.log(`Pubkey: ${PubkeyUtil.fromHex(wallet.publicKey!)}`);
-      const messageBytes = MessageUtil.serialize(messageObj);
-      console.log(`Message hash: ${MessageUtil.hash(messageObj).toString()}`);
-      const signature = await wallet.signMessage(Buffer.from(MessageUtil.hash(messageObj)).toString('hex'));
-      console.log(`Signature: ${signature}`);
+      console.log(`Pubkey: ${pubkeyBytes}`);
+      const messageHash = MessageUtil.hash(messageObj);
+      console.log(`Message hash: ${messageHash.toString()}`);
 
-      // Take last 64 bytes of base64 decoded signature
-      const signatureBytes = new Uint8Array(Buffer.from(signature, 'base64')).slice(2);
-      console.log(`Signature bytes: ${signatureBytes}`);
+      const signature = await wallet.signMessage(Buffer.from(messageHash).toString('hex'));
+      console.log(`Raw signature: ${signature}`);
 
+      // Convert the signature to bytes
+      const signatureBytes = new Uint8Array(Buffer.from(signature, 'base64'));
+
+      // If not Unisat, slice off the first two bytes
+      const processedSignatureBytes = signatureBytes.slice(2);
+
+      console.log(`Processed signature bytes: ${processedSignatureBytes}`);
       console.log(`Transaction: ${JSON.stringify(messageObj)}`);
 
       const result = await client.sendTransaction({
         version: 0,
-        signatures: [signatureBytes],
+        signatures: [processedSignatureBytes],
         message: messageObj,
       });
 
@@ -328,6 +350,54 @@ const GraffitiWallComponent = () => {
     }
   };
 
+  // Submit new message
+  const submitMessage = async (name: string, message: string) => {
+    try {
+      if (!wallet.isConnected) {
+        setError('Please connect your wallet first');
+        return;
+      }
+
+      // Prepare the instruction data
+      const nameBytes = new TextEncoder().encode(name.padEnd(64, '\0'));
+      const messageBytes = new TextEncoder().encode(message.padEnd(64, '\0'));
+      
+      // Combine into a single buffer
+      const instructionData = new Uint8Array([
+        ...nameBytes,
+        ...messageBytes
+      ]);
+
+      // Create and send transaction
+      const transaction = await createTransaction(
+        PROGRAM_PUBKEY,
+        WALL_ACCOUNT_PUBKEY,
+        true,
+        true,
+        Buffer.from(instructionData).toString('hex'),
+        wallet.privateKey!
+      );
+
+      await client.sendTransaction(transaction);
+      
+      // Refresh the wall data
+      await fetchWallData();
+      
+      setError(null);
+    } catch (error) {
+      console.error('Error submitting message:', error);
+      setError('Failed to submit message');
+    }
+  };
+
+  const hexToUint8Array = (hex: string): Uint8Array => {
+    const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
+    const numbers = new Uint8Array(cleanHex.length / 2);
+    for (let i = 0; i < cleanHex.length; i += 2) {
+      numbers[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
+    }
+    return numbers;
+  };
 
   return (
     <>
@@ -352,59 +422,55 @@ const GraffitiWallComponent = () => {
 
       {!wallet.isConnected ? (
         <div className="space-y-4 mb-4">
-          <div className="mb-4">
-            <select 
-              value={selectedWallet}
-              onChange={(e) => setSelectedWallet(e.target.value)}
-              className="w-full px-3 py-2 bg-arch-gray text-arch-white rounded-md focus:outline-none focus:ring-2 focus:ring-arch-orange"
+          <div className="bg-arch-black/30 p-4 rounded-lg backdrop-blur-sm">
+            <h3 className="text-lg font-medium text-arch-white mb-3">
+              Select Wallet
+            </h3>
+            <WalletSelector
+              selectedWallet={selectedWallet}
+              onSelect={setSelectedWallet}
+              wallets={wallet.availableWallets}
+            />
+            
+            <button
+              onClick={async () => {
+                try {
+                  addDebugLog(`Attempting connection with ${selectedWallet}...`);
+                  await wallet.connect(selectedWallet);
+                  addDebugLog('Wallet connected successfully');
+                } catch (error) {
+                  const errorMessage = error instanceof Error ? error.message : String(error);
+                  addDebugLog(`Connection error: ${errorMessage}`);
+                  setError(`Failed to connect: ${errorMessage}`);
+                }
+              }}
+              className="w-full mt-4 bg-arch-orange text-arch-black font-medium py-2 px-4 rounded-lg hover:bg-arch-orange/90 transition-colors duration-200"
             >
-              {wallet.availableWallets.map(provider => (
-                <option key={provider.name} value={provider.name}>
-                  {provider.name}
-                </option>
-              ))}
-            </select>
+              Connect {selectedWallet}
+            </button>
           </div>
-          <button
-            onClick={async () => {
-              try {
-                addDebugLog(`Attempting connection with ${selectedWallet}...`);
-                await wallet.connect(selectedWallet);
-                addDebugLog('Wallet connected successfully');
-              } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                addDebugLog(`Connection error: ${errorMessage}`);
-                setError(`Failed to connect: ${errorMessage}`);
-              }
-            }}
-            className="w-full mb-4 bg-arch-orange text-arch-black font-bold py-2 px-4 rounded-lg hover:bg-arch-white transition duration-300"
-          >
-            Connect Wallet
-          </button>
+
           {error && (
-            <div className="mt-6 p-4 bg-red-500 text-white rounded-lg">
-              <div className="flex items-center mb-2">
-                <AlertCircle className="w-6 h-6 mr-2" />
-                <p className="font-bold">Program Error</p>
-              </div>
+            <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg flex items-center gap-2 text-sm">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <p>{error}</p>
             </div>
           )}
         </div>
       ) : (
-        <div className="mb-4 space-y-2">
-          <button
-            onClick={wallet.disconnect}
-            className="w-full bg-gray-600 text-arch-white font-bold py-2 px-4 rounded-lg hover:bg-gray-700 transition duration-300"
-          >
-            Disconnect Wallet
-          </button>
-          <div className="bg-arch-black p-3 rounded-lg">
-            <p className="text-arch-white text-sm">
-              <span className="text-arch-orange font-semibold">Connected Address:</span>{' '}
-              <span className="font-mono break-all">{wallet.address || wallet.publicKey}</span>
+        <div className="flex items-center gap-3 mb-4 bg-arch-black/30 p-3 rounded-lg">
+          <div className="flex-grow">
+            <p className="text-sm text-arch-gray-400">Connected to {wallet.provider}</p>
+            <p className="font-mono text-xs text-arch-white truncate">
+              {wallet.address || wallet.publicKey}
             </p>
           </div>
+          <button
+            onClick={wallet.disconnect}
+            className="px-3 py-1.5 bg-arch-black/50 text-arch-white text-sm font-medium rounded-lg hover:bg-arch-black/70 transition-colors duration-200"
+          >
+            Disconnect
+          </button>
         </div>
       )}
       
@@ -469,7 +535,7 @@ const GraffitiWallComponent = () => {
             <div className="bg-arch-black p-6 rounded-lg">
               <h3 className="text-2xl font-bold mb-4 text-arch-white">Wall Messages</h3>
               <div className="space-y-4 max-h-96 overflow-y-auto">
-                {wallData.map((item, index) => (
+                {[...wallData].reverse().map((item, index) => (
                   <div key={index} className="bg-arch-gray p-3 rounded-lg">
                     <p className="font-bold text-arch-orange">{new Date(item.timestamp * 1000).toLocaleString()}</p>
                     <p className="text-arch-white"><span className="font-semibold">{item.name}:</span> {item.message}</p>

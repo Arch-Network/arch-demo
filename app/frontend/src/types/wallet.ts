@@ -4,7 +4,7 @@ export interface WalletProvider {
   isAvailable: () => boolean;
   connect: () => Promise<{ address: string; publicKey?: string }>;
   disconnect: () => Promise<void>;
-  signMessage: (message: string) => Promise<string>;
+  signMessage: (message: string, address?: string) => Promise<string>;
 }
 
 export interface ConnectedWallet {

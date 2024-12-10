@@ -1,4 +1,6 @@
+import { AddressPurpose, request, MessageSigningProtocols } from 'sats-connect';
 import { WalletProvider } from '../types/wallet';
+import { convertToTaprootSignature } from '../utils/signatureUtils';
 
 export const checkWalletAvailability = (windowObj: any, identifier: string): boolean => {
   return !!(windowObj && windowObj[identifier]);
@@ -7,33 +9,79 @@ export const checkWalletAvailability = (windowObj: any, identifier: string): boo
 export const walletProviders: WalletProvider[] = [
   {
     name: 'Xverse',
-    icon: '/xverse.png',
-    isAvailable: () => checkWalletAvailability(window, 'XverseProviders'),
-    connect: async () => {
-      const response = await window.XverseProviders?.BitcoinProvider.request('getAddresses', {
-        purposes: ['payment'],
-        message: 'Connect to Arch Network',
-      });
+    icon: '/xverse_wallet.png',
+    isAvailable: () => {
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const isXverseBrowser = !!(window.XverseProviders?.BitcoinProvider) || !!window.XverseProviders;
       
-      if (!response?.addresses?.[0]?.address) {
-        throw new Error('Failed to get address from Xverse wallet');
+      if (isMobile && !isXverseBrowser) {
+        const currentUrl = encodeURIComponent(window.location.href);
+        if (window.confirm('You will be redirected to Xverse wallet to continue. Press OK to proceed.')) {
+          window.location.href = `https://connect.xverse.app/browser?url=${currentUrl}`;
+          setTimeout(() => {
+            window.location.href = `xverse://browser?url=${currentUrl}`;
+          }, 1000);
+        }
+        return false;
+      }
+      
+      return checkWalletAvailability(window, 'XverseProviders');
+    },
+    connect: async () => {
+      await request('wallet_connect', {
+        message: 'Connect to Arch Network',
+        addresses: [AddressPurpose.Ordinals],
+      });
+
+      const response = await window.XverseProviders?.BitcoinProvider.request('getAddresses', {
+        purposes: [AddressPurpose.Ordinals],
+        message: 'Connect to Arch Network',
+        network: {
+          type: 'Testnet'
+        }
+      });
+
+      if (!response?.result?.addresses?.[0]) {
+        throw new Error('No addresses returned from wallet');
+      }
+
+      const address = response.result.addresses[0].address;
+      const publicKey = response.result.addresses[0].publicKey;
+
+      // Store the address in local storage
+      localStorage.setItem('xverseAddress', address);
+
+      if (!publicKey) {
+        throw new Error('No public key returned from Xverse wallet');
       }
 
       return {
-        address: response.addresses[0].address,
-        publicKey: response.addresses[0].publicKey
+        address,
+        publicKey
       };
     },
     disconnect: async () => {
-      // Xverse doesn't have a disconnect method, so we just resolve
       return Promise.resolve();
     },
     signMessage: async (message: string) => {
-      const response = await window.XverseProviders?.BitcoinProvider.request('signMessage', {
-        message,
-        address: state.address, // You'll need to store this in state
-      });
-      return response.signature;
+      try {
+
+        const signResult = await request('signMessage', {
+          message,
+          address: localStorage.getItem('xverseAddress') || '',
+          protocol: MessageSigningProtocols.BIP322
+        });
+        console.log('Xverse signResult', signResult);
+
+        if (!signResult?.result?.signature) {
+          throw new Error('Failed to get signature from Xverse wallet');
+        }
+
+        return signResult.result.signature;
+      } catch (error) {
+        console.error('Error signing with Xverse:', error);
+        throw error;
+      }
     }
   },
   {
@@ -41,19 +89,28 @@ export const walletProviders: WalletProvider[] = [
     icon: '/unisat.png',
     isAvailable: () => checkWalletAvailability(window, 'unisat'),
     connect: async () => {
-      console.log('Unisat object', window.unisat);
       const accounts = await window.unisat.requestAccounts();
-      console.log('Unisat accounts', accounts);
+      const publicKey = await window.unisat.getPublicKey();
       return {
         address: accounts[0],
-        publicKey: accounts[0] // Unisat doesn't provide publicKey directly
+        publicKey: publicKey
       };
     },
     disconnect: async () => {
       return Promise.resolve();
     },
     signMessage: async (message: string) => {
-      return await window.unisat.signMessage(message);
+      console.log('Unisat signMessage', message);
+      try {
+        // Request BIP322 signature from Unisat
+        const signature = await window.unisat.signMessage(message, "bip322-simple");
+        console.log('Unisat bip322-simple signature', signature);
+
+        return signature;
+      } catch (error) {
+        console.error('Error signing with Unisat:', error);
+        throw error;
+      }
     }
   },
   {
@@ -78,8 +135,6 @@ export const walletProviders: WalletProvider[] = [
     name: 'Leather',
     icon: '/leather.png',
     isAvailable: () => {
-    
-      console.log('Checking Leather availability:', window.btc?.isLeather);
       return !!(window.btc?.isLeather);
     },
     connect: async () => {
@@ -88,7 +143,9 @@ export const walletProviders: WalletProvider[] = [
       }
       
       try {
-        const response = await window.btc.request('getAddresses');
+        const response = await window.btc.request('getAddresses', {
+          network: 'testnet'
+        });
         console.log('Leather response', response);
         
         // Find the p2tr address from the response
@@ -100,9 +157,23 @@ export const walletProviders: WalletProvider[] = [
           throw new Error('No P2TR address returned from Leather wallet');
         }
 
+        // Store the address in localStorage
+        localStorage.setItem('leatherP2trAddress', p2trAddress.address);
+
+        // Ensure we're getting the correct public key format
+        let publicKey = p2trAddress.publicKey;
+        if (typeof publicKey === 'string') {
+          // Remove '0x' prefix if present
+          publicKey = publicKey.startsWith('0x') ? publicKey.slice(2) : publicKey;
+          // Convert hex string to byte array if needed
+          if (publicKey.match(/^[0-9a-fA-F]+$/)) {
+            publicKey = Buffer.from(publicKey, 'hex').toString('hex');
+          }
+        }
+
         return {
           address: p2trAddress.address,
-          publicKey: p2trAddress.publicKey
+          publicKey: publicKey
         };
       } catch (error) {
         console.error('Leather connect error:', error);
@@ -116,7 +187,33 @@ export const walletProviders: WalletProvider[] = [
       if (!window.btc) {
         throw new Error('Leather wallet not found');
       }
-      return await window.btc.request('signMessage', { message });
+
+      try {
+        // Assume p2trAddress is already available
+        const p2trAddress = localStorage.getItem('leatherP2trAddress');
+        if (!p2trAddress) {
+          throw new Error('No P2TR address found for signing');
+        }
+
+        console.log('Leather signMessage', message);
+        const response = await window.btc.request('signMessage', {
+          message,
+          network: 'testnet',
+          paymentType: 'p2tr',
+          address: p2trAddress
+        });
+
+        console.log('Leather response', response);
+
+        if (!response?.result?.signature) {
+          throw new Error('Failed to get signature from Leather wallet');
+        }
+
+        return response.result.signature;
+      } catch (error) {
+        console.error('Error signing with Leather:', error);
+        throw error;
+      }
     }
   }
 ];

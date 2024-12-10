@@ -22,6 +22,15 @@ interface BlockData {
   timestamp: string;
 }
 
+interface Transaction {
+  txid: string;
+  block_height: number;
+  status: string;
+  created_at: string;
+  data: any;
+  bitcoin_txids: string[] | null;
+}
+
 interface SyncStatus {
   current_block_height: number;
   latest_block_height: number;
@@ -225,7 +234,7 @@ const TransactionHistoryPage: React.FC = () => {
         throw new Error('Failed to fetch latest transactions');
       }
       const data = await response.json();
-      setLatestTransactions(data.transactions);
+      setLatestTransactions(data.slice(0, 5));
     } catch (err) {
       console.error('Error fetching latest transactions:', err);
     }
