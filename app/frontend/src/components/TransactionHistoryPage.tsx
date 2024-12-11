@@ -45,8 +45,10 @@ interface NetworkStats {
   total_transactions: number;
   block_height: number;
   slot_height: number;
-  tps: number;
-  true_tps: number;
+  current_tps: number;
+  average_tps: number;
+  peak_tps: number;
+  daily_transactions: number;
 }
 
 interface ProgramStats {
@@ -54,6 +56,15 @@ interface ProgramStats {
   transaction_count: number;
   first_seen_at: string;
   last_seen_at: string;
+}
+
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: ReactNode;
+  trend?: string;
+  highlight?: boolean;
 }
 
 const TransactionHistoryPage: React.FC = () => {
@@ -246,6 +257,12 @@ const TransactionHistoryPage: React.FC = () => {
     return () => clearInterval(intervalId);
   }, [fetchLatestTransactions]);
 
+  const networkLoadStatus = networkStats?.current_tps > networkStats?.average_tps * 1.5 
+    ? 'High' 
+    : networkStats?.current_tps > networkStats?.average_tps 
+      ? 'Medium' 
+      : 'Low';
+
   if (!serverStatus) {
     return <ErrorMessage message="The Arch Indexer API is not running. Please start the server using 'arch-cli indexer start'." />;
   }
@@ -262,10 +279,10 @@ const TransactionHistoryPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <MetricCard
               title="Network Status"
-              value={networkStats?.true_tps || "0"}
+              value={networkStats?.current_tps?.toFixed(2) || "0"}
               subtitle="Current TPS"
               icon={<Activity className="text-green-400" />}
-              trend="+5.2%"
+              secondaryValue={`Peak: ${networkStats?.peak_tps?.toFixed(2) || "0"}`}
               highlight
             />
             <MetricCard
@@ -275,15 +292,16 @@ const TransactionHistoryPage: React.FC = () => {
               icon={<Box className="text-arch-orange" />}
             />
             <MetricCard
-              title="Transactions"
-              value={formatNumber(networkStats?.total_transactions || 0)}
-              subtitle="24h Volume"
+              title="24h Transactions"
+              value={formatNumber(networkStats?.daily_transactions || 0)}
+              subtitle="Volume"
               icon={<ArrowRightLeft className="text-blue-400" />}
+              secondaryValue={`Avg TPS: ${networkStats?.average_tps?.toFixed(2) || "0"}`}
             />
             <MetricCard
-              title="Active Programs"
-              value={programs?.length || "0"}
-              subtitle="Last 24h"
+              title="Total Transactions"
+              value={formatNumber(networkStats?.total_transactions || 0)}
+              subtitle="All Time"
               icon={<Code className="text-purple-400" />}
             />
           </div>
@@ -302,9 +320,9 @@ const TransactionHistoryPage: React.FC = () => {
                 transactions={latestTransactions} 
                 compact 
               />
-              <div className="mt-4 text-center">
+              {/* <div className="mt-4 text-center">
                 <Button variant="outline">View All Transactions</Button>
-              </div>
+              </div> */}
             </div>
 
             {/* Recent Blocks Panel */}
@@ -339,13 +357,13 @@ const TransactionHistoryPage: React.FC = () => {
                 />
                 <HealthMetric
                   label="Node Version"
-                  value="v1.2.3"
+                  value="v0.2.17"
                   status="success"
                 />
                 <HealthMetric
                   label="Network Load"
-                  value="Medium"
-                  status="warning"
+                  value={networkLoadStatus}
+                  status={networkLoadStatus === 'High' ? 'error' : 'warning'}
                 />
               </div>
             </div>
