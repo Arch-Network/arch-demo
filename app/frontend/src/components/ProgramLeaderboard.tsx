@@ -17,10 +17,10 @@ interface ProgramLeaderboardProps {
 
 // Add this mapping at the top of the file, outside the component
 const PROGRAM_NAME_MAPPING: { [key: string]: string } = {
-  "836f0e206b4f8e9c84991d4182f19f30e1434858a8898efca26a304f94e28906": "FunkyBit",
-  "939333d5df6e9061815e41f8804f42d3f7059cee4841b6ea7277a53dbb6cda33": "Graffiti Wall",
+  // "836f0e206b4f8e9c84991d4182f19f30e1434858a8898efca26a304f94e28906": "FunkyBit",
+  // "939333d5df6e9061815e41f8804f42d3f7059cee4841b6ea7277a53dbb6cda33": "Graffiti Wall",
   "0000000000000000000000000000000000000000000000000000000000000001": "System Program",
-  "10b1ec050c359a3ee7a47f648d1888638ce01389c79c15d53bc880482b4349ff": "Saturn DEX"
+  // "10b1ec050c359a3ee7a47f648d1888638ce01389c79c15d53bc880482b4349ff": "Saturn DEX"
 };
 
 const ProgramLeaderboard: React.FC<ProgramLeaderboardProps> = ({ programs }) => {

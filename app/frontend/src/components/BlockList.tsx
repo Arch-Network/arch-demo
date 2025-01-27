@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Hash, Layers, Clock, User, FileText } from 'lucide-react';
-
+import { formatTimestamp } from '../utils/dateUtils';
 interface BlockData {
   height: number;
   hash: string;
@@ -14,11 +14,6 @@ interface BlockListProps {
   blocks: BlockData[];
   compact?: boolean;
 }
-
-const formatTimestamp = (timestamp: string): string => {
-  const date = new Date(timestamp);
-  return date.toLocaleString();
-};
 
 const formatNumber = (num: number): string => {
   return new Intl.NumberFormat().format(num);

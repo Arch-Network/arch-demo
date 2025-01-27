@@ -65,6 +65,7 @@ interface MetricCardProps {
   icon: ReactNode;
   trend?: string;
   highlight?: boolean;
+  secondaryValue?: string;
 }
 
 const TransactionHistoryPage: React.FC = () => {
@@ -192,24 +193,56 @@ const TransactionHistoryPage: React.FC = () => {
   const handleSearch = async (searchTerm: string) => {
     setLoading(true);
     setError(null);
-  
+
     try {
+      // Add logging for debugging
+      console.log('Searching for:', searchTerm);
+
       const response = await fetch(`${INDEXER_API_URL}/search?term=${encodeURIComponent(searchTerm)}`);
+      console.log('Search response status:', response.status);
+
       if (!response.ok) {
-        throw new Error('Search failed');
+        throw new Error(`Search failed: ${response.statusText}`);
       }
+
       const result = await response.json();
-  
-      if (result.type === 'block') {
-        navigate(`/block/${result.data.hash}`);
-      } else if (result.type === 'transaction') {
-        navigate(`/transaction/${result.data.txid}`);
-      } else {
-        setError('No block or transaction found with the given ID.');
+      console.log('Search result:', result);
+
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      if (!result.type || !result.data) {
+        setError('Invalid search result format');
+        return;
+      }
+
+      switch (result.type) {
+        case 'block':
+          if (result.data.hash) {
+            navigate(`/block/${result.data.hash}`);
+          } else if (result.data.height) {
+            navigate(`/block/${result.data.height}`);
+          } else {
+            setError('Invalid block data received');
+          }
+          break;
+
+        case 'transaction':
+          if (result.data.txid) {
+            navigate(`/transaction/${result.data.txid}`);
+          } else {
+            setError('Invalid transaction data received');
+          }
+          break;
+
+        default:
+          setError(`Unknown result type: ${result.type}`);
       }
     } catch (err) {
       console.error('Error during search:', err);
-      setError('An error occurred during the search. Please try again.');
+      setError(err instanceof Error ? err.message : 'An error occurred during the search');
     } finally {
       setLoading(false);
     }
@@ -257,9 +290,9 @@ const TransactionHistoryPage: React.FC = () => {
     return () => clearInterval(intervalId);
   }, [fetchLatestTransactions]);
 
-  const networkLoadStatus = networkStats?.current_tps > networkStats?.average_tps * 1.5 
+  const networkLoadStatus = (networkStats?.current_tps ?? 0) > (networkStats?.average_tps ?? 0) * 1.5
     ? 'High' 
-    : networkStats?.current_tps > networkStats?.average_tps 
+    : (networkStats?.current_tps ?? 0) > (networkStats?.average_tps ?? 0)
       ? 'Medium' 
       : 'Low';
 
@@ -381,6 +414,7 @@ interface MetricCardProps {
   icon: ReactNode;
   trend?: string;
   highlight?: boolean;
+  secondaryValue?: string;
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({
